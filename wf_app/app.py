@@ -67,8 +67,19 @@ _COHERE_CSS = """
   h3 { font-size: 20px !important; line-height: 1.3 !important; }
   h4 { font-size: 18px !important; }
 
-  .hero-title { text-align: center; margin-top: 10vh; margin-bottom: 6px; }
+  .hero-title { text-align: center; margin-top: 8vh; margin-bottom: 6px; }
   .hero-sub { text-align: center; color: var(--muted); font-size: 15px; margin-bottom: 28px; }
+
+  /* Dashboard filename — large, vertically aligned with back arrow */
+  .dash-filename {
+    font-family: 'Space Grotesk', sans-serif !important;
+    font-size: 32px !important;
+    font-weight: 500 !important;
+    letter-spacing: -0.72px !important;
+    color: var(--near-black) !important;
+    line-height: 1.1 !important;
+    padding: 6px 0 !important;
+  }
 
   .chat-msg { padding: 18px 0; border-bottom: 1px solid var(--border-light); }
   .chat-user { font-weight: 500; color: var(--near-black); }
@@ -151,9 +162,10 @@ _COHERE_CSS = """
     color: var(--near-black) !important;
     border: none !important;
     padding: 4px 8px !important;
-    font-size: 22px !important;
+    font-size: 28px !important;
     line-height: 1 !important;
     border-radius: 8px !important;
+    margin-top: 18px !important;  /* align with the larger filename baseline */
   }
   div[data-testid="stButton"]:has(button[key="back_arrow"]) button:hover {
     background: var(--stone) !important;
@@ -205,6 +217,46 @@ _COHERE_CSS = """
   .viewerBadge_link__qRIco { display: none !important; }
   [data-testid="stDecoration"] { display: none; }
   [data-testid="stHeader"] { background: transparent; }
+
+  /* ── Top navbar (UBL placeholder) ──────────────────────────────────── */
+  nav.topnav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 52px;
+    padding: 0 32px;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--canvas);
+    margin: -80px -16px 32px -16px;  /* pull to viewport edge, gap below */
+  }
+  nav.topnav .topnav-left,
+  nav.topnav .topnav-right {
+    display: flex; align-items: center; gap: 10px;
+  }
+  nav.topnav .topnav-mark {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    color: var(--near-black);
+  }
+  nav.topnav .topnav-sep {
+    color: var(--hairline);
+    font-size: 14px;
+  }
+  nav.topnav .topnav-section {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--near-black);
+  }
+  nav.topnav .topnav-meta {
+    font-family: 'Space Grotesk', monospace;
+    font-size: 11px;
+    letter-spacing: 0.28px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
 </style>
 """
 st.markdown(_COHERE_CSS, unsafe_allow_html=True)
@@ -218,6 +270,21 @@ for k, v in {"messages": [], "uploaded_data_name": None,
              "pipeline_error": None}.items():
     if k not in st.session_state:
         st.session_state[k] = v
+
+
+# ── top navbar (persistent) ─────────────────────────────────────────────
+st.markdown("""
+<nav class="topnav">
+  <div class="topnav-left">
+    <span class="topnav-mark">UBL</span>
+    <span class="topnav-sep">·</span>
+    <span class="topnav-section">Workforce Intelligence</span>
+  </div>
+  <div class="topnav-right">
+    <span class="topnav-meta">Operations · Internal</span>
+  </div>
+</nav>
+""", unsafe_allow_html=True)
 
 
 # ── pipeline runner (cached, runs once per file+params) ─────────────────
@@ -424,15 +491,19 @@ if err is not None:
                 "transaction KPIs, and branch/HR attributes.")
 elif R is not None:
     # ── header row: arrow + filename ──
-    back_l, name_l = st.columns([0.6, 9])
+    back_l, name_l = st.columns([1, 11])
     with back_l:
+        st.markdown("<div style='height:100%; display:flex; align-items:center;'>"
+                    f"{''}</div>", unsafe_allow_html=True)
         if st.button("←", key="back_arrow", help="Replace file"):
             for k in ("pipeline_result", "pipeline_error", "uploaded_data_name",
                       "uploaded_hier_name", "messages", "open_section"):
                 st.session_state[k] = None
             st.rerun()
     with name_l:
-        st.markdown(f"**{st.session_state.uploaded_data_name}**")
+        st.markdown(
+            f"<div class='dash-filename'>{st.session_state.uploaded_data_name}</div>",
+            unsafe_allow_html=True)
     emp = R["emp"]; meta = R["meta"]
     k1, k2, k3, k4, k5 = st.columns(5)
     k1.metric("Employees", f"{meta['n_emp']:,}")
