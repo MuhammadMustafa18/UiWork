@@ -78,7 +78,30 @@ _COHERE_CSS = """
     letter-spacing: -0.72px !important;
     color: var(--near-black) !important;
     line-height: 1.1 !important;
-    padding: 6px 0 !important;
+    padding: 6px 0 2px 0 !important;
+  }
+  /* Stats line — small, muted, inline below filename */
+  .dash-stats {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 13px !important;
+    color: var(--muted) !important;
+    line-height: 1.4 !important;
+    padding: 0 0 6px 0 !important;
+  }
+
+  /* Analysis dropdown — pill style */
+  div[data-testid="stSelectbox"] > div > div {
+    background: var(--canvas) !important;
+    border: 1px solid var(--hairline) !important;
+    border-radius: 24px !important;
+    padding: 6px 14px !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+  }
+  div[data-testid="stSelectbox"] > div > div:focus-within {
+    border-color: var(--near-black) !important;
+    box-shadow: 0 0 0 3px rgba(23,23,28,0.08) !important;
   }
 
   .chat-msg { padding: 18px 0; border-bottom: 1px solid var(--border-light); }
@@ -265,7 +288,9 @@ BAND_COLORS = {"High Performer": "#003c33", "Solid": "#4c9f70", "Average": "#d4a
 
 # ── session state ───────────────────────────────────────────────────────
 for k, v in {"messages": [], "uploaded_data_name": None,
-             "uploaded_hier_name": None, "pipeline_result": None,
+             "uploaded_hier_name": None, "uploaded_at": None,
+             "uploaded_size": None, "active_tile_label": "— Select analysis —",
+             "open_section": None, "pipeline_result": None,
              "pipeline_error": None}.items():
     if k not in st.session_state:
         st.session_state[k] = v
@@ -342,6 +367,8 @@ if data_file is not None and (
         st.session_state.pipeline_result = R
         st.session_state.pipeline_error = None
         st.session_state.uploaded_data_name = data_file.name
+        st.session_state.uploaded_size = len(data_file.getvalue())
+        st.session_state.uploaded_at = __import__("datetime").datetime.now()
         if hier_file:
             st.session_state.uploaded_hier_name = hier_file.name
         st.session_state.messages = [
@@ -489,31 +516,58 @@ if err is not None:
     st.markdown("Expected columns include **`Employee`**, **`Trxn_Date`**, "
                 "transaction KPIs, and branch/HR attributes.")
 elif R is not None:
-    # ── header row: arrow + filename ──
-    back_l, name_l = st.columns([1, 11], vertical_alignment="center")
+    # ── header row: arrow + filename + dropdown ──
+    emp = R["emp"]; meta = R["meta"]
+    size_kb = (st.session_state.uploaded_size or 0) / 1024
+    if size_kb >= 1024:
+        size_str = f"{size_kb / 1024:.1f} MB"
+    else:
+        size_str = f"{size_kb:.0f} KB"
+    stats_line = (f"{meta['n_emp']:,} employees · "
+                  f"{meta['network_days']} business days · "
+                  f"{emp['branch_code'].nunique()} branches · "
+                  f"{size_str} · "
+                  f"uploaded {st.session_state.uploaded_at.strftime('%H:%M') if st.session_state.uploaded_at else 'now'}")
+
+    back_l, mid_l, right_l = st.columns([0.6, 7, 2.4], vertical_alignment="center")
     with back_l:
         if st.button("←", key="back_arrow", help="Replace file"):
             for k in ("pipeline_result", "pipeline_error", "uploaded_data_name",
-                      "uploaded_hier_name", "messages", "open_section"):
+                      "uploaded_hier_name", "uploaded_at", "uploaded_size",
+                      "messages", "open_section"):
                 st.session_state[k] = None
             st.rerun()
-    with name_l:
+    with mid_l:
         st.markdown(
-            f"<div class='dash-filename'>{st.session_state.uploaded_data_name}</div>",
+            f"<div class='dash-filename'>{st.session_state.uploaded_data_name}</div>"
+            f"<div class='dash-stats'>{stats_line}</div>",
             unsafe_allow_html=True)
-    emp = R["emp"]; meta = R["meta"]
-    k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric("Employees", f"{meta['n_emp']:,}")
-    k2.metric("Branches", f"{emp['branch_code'].nunique():,}")
-    k3.metric("Window days", f"{meta['network_days']}")
-    k4.metric("High performers", int((emp["band"] == "High Performer").sum()))
-    k5.metric("Fairness", "FAIL" if R["fair_failed"] else "PASS")
+    with right_l:
+        tile_options = ["— Select analysis —", "Headcount", "Bands", "Top performers",
+                        "Low performers", "Fairness audit", "SHAP drivers",
+                        "HP personas", "LP segments", "Growth drivers",
+                        "Hiring recs", "Rollup", "Deciles"]
+        tile_keys = [None, "headcount", "bands", "top", "low", "fairness", "shap",
+                     "hp_personas", "lp_segments", "growth", "hiring", "rollup", "deciles"]
+        current_label = st.session_state.get("active_tile_label", tile_options[0])
+        try:
+            current_idx = tile_options.index(current_label)
+        except ValueError:
+            current_idx = 0
+        picked = st.selectbox("", tile_options, index=current_idx,
+                              label_visibility="collapsed", key="analysis_picker")
+        if picked != tile_options[0]:
+            st.session_state.open_section = tile_keys[tile_options.index(picked)]
+            st.session_state.active_tile_label = picked
+        else:
+            st.session_state.open_section = None
+            st.session_state.active_tile_label = picked
+
     if meta["network_days"] < 60:
         st.warning(f"Window is only {meta['network_days']} business days — "
                    "treat scores as short-window throughput indicators.")
     if R["fair_failed"]:
         st.error("Fairness audit FAILED — scores must be withheld from consequential HR use.")
-# else: no file uploaded, no error — landing page already showed uploaders above.
 
     st.divider()
 
@@ -521,43 +575,10 @@ elif R is not None:
     if "open_section" not in st.session_state:
         st.session_state.open_section = None
 
-    tiles = [
-        ("Headcount",          "headcount",      "Overview · KPIs"),
-        ("Bands",              "bands",          "Distribution by band"),
-        ("Top performers",     "top",            "Top 15 by composite score"),
-        ("Low performers",     "low",            "Bottom 15 — environment-aware"),
-        ("Fairness audit",     "fairness",       "Parity, equal opp, calibration"),
-        ("SHAP drivers",       "shap",           "Global model explanations"),
-        ("HP personas",        "hp_personas",    "KMeans clusters of high performers"),
-        ("LP segments",        "lp_segments",    "Low-perf clusters + diagnoses"),
-        ("Growth drivers",     "growth",         "Non-circular driver model"),
-        ("Hiring recs",        "hiring",         "Net hire need per region"),
-        ("Rollup",             "rollup",         "Hierarchy rollup — region"),
-        ("Deciles",            "deciles",        "Per-job decile profile"),
-    ]
-
-    # render 3 tiles per row
-    for i in range(0, len(tiles), 3):
-        row = tiles[i:i+3]
-        cols = st.columns(3)
-        for col, (label, key, sub) in zip(cols, row):
-            with col:
-                active = st.session_state.open_section == key
-                btn_label = ("■ " if active else "▶ ") + label
-                if st.button(btn_label, key=f"tile_{key}", use_container_width=True):
-                    st.session_state.open_section = None if active else key
-                    st.rerun()
-                st.caption(sub)
-
-    # ── expanded section content ──
+    # ── active section content (driven by dropdown above) ──
     if st.session_state.open_section:
         key = st.session_state.open_section
-        st.divider()
-        st.markdown(f"### {next(t[0] for t in tiles if t[1] == key)}")
         render_payload(answer(key))
-        if st.button("Close"):
-            st.session_state.open_section = None
-            st.rerun()
 
 
 # ── composer (pinned to bottom) ─────────────────────────────────────────
