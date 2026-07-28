@@ -165,7 +165,6 @@ _COHERE_CSS = """
     font-size: 28px !important;
     line-height: 1 !important;
     border-radius: 8px !important;
-    margin-top: 18px !important;  /* align with the larger filename baseline */
   }
   div[data-testid="stButton"]:has(button[key="back_arrow"]) button:hover {
     background: var(--stone) !important;
@@ -219,7 +218,7 @@ _COHERE_CSS = """
   [data-testid="stHeader"] { background: transparent; }
 
   /* ── Top navbar (UBL placeholder) ──────────────────────────────────── */
-  nav.topnav {
+  div.topnav {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -227,30 +226,30 @@ _COHERE_CSS = """
     padding: 0 32px;
     border-bottom: 1px solid var(--hairline);
     background: var(--canvas);
-    margin: -80px -16px 32px -16px;  /* pull to viewport edge, gap below */
+    margin: -80px -16px 32px -16px;
   }
-  nav.topnav .topnav-left,
-  nav.topnav .topnav-right {
+  div.topnav .topnav-left,
+  div.topnav .topnav-right {
     display: flex; align-items: center; gap: 10px;
   }
-  nav.topnav .topnav-mark {
+  div.topnav .topnav-mark {
     font-family: 'Space Grotesk', sans-serif;
     font-weight: 600;
     font-size: 15px;
     letter-spacing: 0.5px;
     color: var(--near-black);
   }
-  nav.topnav .topnav-sep {
+  div.topnav .topnav-sep {
     color: var(--hairline);
     font-size: 14px;
   }
-  nav.topnav .topnav-section {
+  div.topnav .topnav-section {
     font-family: 'Inter', sans-serif;
     font-weight: 500;
     font-size: 14px;
     color: var(--near-black);
   }
-  nav.topnav .topnav-meta {
+  div.topnav .topnav-meta {
     font-family: 'Space Grotesk', monospace;
     font-size: 11px;
     letter-spacing: 0.28px;
@@ -274,7 +273,7 @@ for k, v in {"messages": [], "uploaded_data_name": None,
 
 # ── top navbar (persistent) ─────────────────────────────────────────────
 st.markdown("""
-<nav class="topnav">
+<div class="topnav">
   <div class="topnav-left">
     <span class="topnav-mark">UBL</span>
     <span class="topnav-sep">·</span>
@@ -283,7 +282,7 @@ st.markdown("""
   <div class="topnav-right">
     <span class="topnav-meta">Operations · Internal</span>
   </div>
-</nav>
+</div>
 """, unsafe_allow_html=True)
 
 
@@ -491,10 +490,8 @@ if err is not None:
                 "transaction KPIs, and branch/HR attributes.")
 elif R is not None:
     # ── header row: arrow + filename ──
-    back_l, name_l = st.columns([1, 11])
+    back_l, name_l = st.columns([1, 11], vertical_alignment="center")
     with back_l:
-        st.markdown("<div style='height:100%; display:flex; align-items:center;'>"
-                    f"{''}</div>", unsafe_allow_html=True)
         if st.button("←", key="back_arrow", help="Replace file"):
             for k in ("pipeline_result", "pipeline_error", "uploaded_data_name",
                       "uploaded_hier_name", "messages", "open_section"):
