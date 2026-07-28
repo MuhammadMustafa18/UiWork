@@ -279,6 +279,69 @@ _COHERE_CSS = """
     text-transform: uppercase;
     color: var(--muted);
   }
+
+  /* ── Animations (Cohere-style: fast, restrained) ───────────────────── */
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes grow-x {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+  @keyframes shimmer {
+    0%   { background-position: -200px 0; }
+    100% { background-position: 200px 0; }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.5; }
+  }
+
+  /* Fade-up on load — hero, navbar, dashboard header */
+  .anim-fade-up { animation: fade-up 220ms ease-out both; }
+  .anim-fade-up-1 { animation: fade-up 220ms ease-out 60ms both; }
+  .anim-fade-up-2 { animation: fade-up 220ms ease-out 120ms both; }
+
+  /* Section reveal — content slides in under header */
+  .anim-section { animation: fade-up 260ms ease-out both; }
+
+  /* Divider grow-in */
+  [data-testid="stDivider"] {
+    transform-origin: left;
+    animation: grow-x 380ms ease-out both;
+  }
+
+  /* Skeleton shimmer on upload boxes before file lands */
+  [data-testid="stFileUploader"]:not(:has(input[type="file"]:valid)) {
+    background: linear-gradient(90deg, var(--canvas) 0%, var(--stone) 50%, var(--canvas) 100%);
+    background-size: 400px 100%;
+    animation: shimmer 1800ms ease-in-out infinite;
+  }
+
+  /* Back arrow nudge on hover */
+  div[data-testid="stButton"]:has(button[key="back_arrow"]) button:hover {
+    transform: translateX(-2px);
+    transition: transform 120ms ease-out;
+  }
+
+  /* Primary button press feedback */
+  .stButton > button:active {
+    transform: scale(0.98);
+    transition: transform 80ms ease-out;
+  }
+
+  /* Dropdown open — subtle lift */
+  div[data-testid="stSelectbox"] > div > div {
+    transition: border-color 150ms ease-out, box-shadow 150ms ease-out, transform 150ms ease-out;
+  }
+  div[data-testid="stSelectbox"] > div > div:hover {
+    transform: translateY(-1px);
+  }
 </style>
 """
 st.markdown(_COHERE_CSS, unsafe_allow_html=True)
@@ -298,7 +361,7 @@ for k, v in {"messages": [], "uploaded_data_name": None,
 
 # ── top navbar (persistent) ─────────────────────────────────────────────
 st.markdown("""
-<div class="topnav">
+<div class="topnav anim-fade-up">
   <div class="topnav-left">
     <span class="topnav-mark">UBL</span>
     <span class="topnav-sep">·</span>
@@ -336,9 +399,9 @@ def _run_pipeline(data_bytes, data_name, hier_bytes, hier_name):
 
 # ── hero + uploaders — only visible before a file is loaded ───────────
 if st.session_state.pipeline_result is None and st.session_state.pipeline_error is None:
-    st.markdown("<div class='hero-title'><h1>Workforce Intelligence</h1></div>",
+    st.markdown("<div class='hero-title anim-fade-up'><h1>Workforce Intelligence</h1></div>",
                 unsafe_allow_html=True)
-    st.markdown("<div class='hero-sub'>Attach an employee extract to begin. "
+    st.markdown("<div class='hero-sub anim-fade-up-1'>Attach an employee extract to begin. "
                 "Every figure recomputes from the uploaded file.</div>",
                 unsafe_allow_html=True)
     box_l, box_r = st.columns(2)
@@ -539,8 +602,8 @@ elif R is not None:
             st.rerun()
     with mid_l:
         st.markdown(
-            f"<div class='dash-filename'>{st.session_state.uploaded_data_name}</div>"
-            f"<div class='dash-stats'>{stats_line}</div>",
+            f"<div class='dash-filename anim-fade-up'>{st.session_state.uploaded_data_name}</div>"
+            f"<div class='dash-stats anim-fade-up-1'>{stats_line}</div>",
             unsafe_allow_html=True)
     with right_l:
         tile_options = ["— Select analysis —", "Headcount", "Bands", "Top performers",
@@ -578,7 +641,9 @@ elif R is not None:
     # ── active section content (driven by dropdown above) ──
     if st.session_state.open_section:
         key = st.session_state.open_section
+        st.markdown("<div class='anim-section'>", unsafe_allow_html=True)
         render_payload(answer(key))
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ── composer (pinned to bottom) ─────────────────────────────────────────
