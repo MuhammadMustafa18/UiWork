@@ -51,9 +51,50 @@ _COHERE_CSS = """
   .stApp { background: var(--canvas); }
   [data-testid="stAppViewContainer"] { background: var(--canvas); }
   .main .block-container {
-    max-width: 760px !important;
+    max-width: 1200px !important;
     padding-top: 80px !important;
     padding-bottom: 200px !important;
+  }
+
+  /* Sidebar and main area share the row as flex children —
+     when sidebar collapses, main grows. */
+  [data-testid="stSidebar"] {
+    background: var(--canvas) !important;
+    border-right: 1px solid var(--hairline) !important;
+    min-width: 240px !important;
+    max-width: 320px !important;
+    padding: 16px 12px !important;
+    flex-shrink: 0;
+  }
+  /* When Streamlit collapses the sidebar, the toggle button must show */
+  [data-testid="stSidebarCollapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    background: var(--canvas) !important;
+    border: 1px solid var(--hairline) !important;
+    border-radius: 0 8px 8px 0 !important;
+    color: var(--near-black) !important;
+    padding: 8px 6px !important;
+    left: 0 !important;
+    top: 80px !important;
+    z-index: 100 !important;
+  }
+  [data-testid="stSidebarCollapsedControl"]:hover {
+    background: var(--stone) !important;
+  }
+  [data-testid="stSidebar"] [data-testid="stExpander"] {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+  [data-testid="stSidebar"] [data-testid="stExpander"] summary {
+    font-family: 'Space Grotesk', sans-serif !important;
+    font-size: 12px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.28px !important;
+    font-weight: 500 !important;
+    color: var(--near-black) !important;
+    padding: 8px 0 !important;
   }
 
   h1, h2, h3, h4 {
@@ -279,39 +320,21 @@ _COHERE_CSS = """
     text-transform: uppercase;
     color: var(--muted);
   }
-
-  /* ── Power BI-style sidebar (re-enabled) ────────────────────────────── */
-  [data-testid="stSidebar"] {
-    background: var(--canvas) !important;
-    border-right: 1px solid var(--hairline) !important;
-    min-width: 280px !important;
-    max-width: 280px !important;
-    padding: 16px 12px !important;
+  button.topnav-toggle {
+    background: transparent;
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 14px;
+    color: var(--near-black);
+    margin-left: 12px;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: background-color .15s, border-color .15s;
   }
-  /* Style the re-open button when sidebar is collapsed */
-  [data-testid="stSidebarCollapsedControl"] {
-    background: var(--canvas) !important;
-    border: 1px solid var(--hairline) !important;
-    border-radius: 0 8px 8px 0 !important;
-    color: var(--near-black) !important;
-    padding: 8px 6px !important;
-  }
-  [data-testid="stSidebarCollapsedControl"]:hover {
-    background: var(--stone) !important;
-  }
-  [data-testid="stSidebar"] [data-testid="stExpander"] {
-    border: none !important;
-    box-shadow: none !important;
-    background: transparent !important;
-  }
-  [data-testid="stSidebar"] [data-testid="stExpander"] summary {
-    font-family: 'Space Grotesk', sans-serif !important;
-    font-size: 12px !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.28px !important;
-    font-weight: 500 !important;
-    color: var(--near-black) !important;
-    padding: 8px 0 !important;
+  button.topnav-toggle:hover {
+    background: var(--stone);
+    border-color: var(--near-black);
   }
 
   /* ── Slicer chip row ───────────────────────────────────────────────── */
@@ -452,11 +475,25 @@ st.markdown("""
     <span class="topnav-mark">UBL</span>
     <span class="topnav-sep">·</span>
     <span class="topnav-section">Workforce Intelligence</span>
+    <button class="topnav-toggle" id="sidebarToggle" title="Toggle sidebar">☰</button>
   </div>
   <div class="topnav-right">
     <span class="topnav-meta">Operations · Internal</span>
   </div>
 </div>
+<script>
+  document.getElementById('sidebarToggle').addEventListener('click', function() {
+    var btn = document.querySelector('[data-testid="stSidebarCollapsedControl"] button')
+           || document.querySelector('[data-testid="stSidebarCollapsedControl"]');
+    if (btn) btn.click();
+    else {
+      // fallback: simulate the X button at the top of the sidebar itself
+      var closeBtn = document.querySelector('[data-testid="stSidebar"] [data-testid="baseButton-header"]')
+                  || document.querySelector('[data-testid="stSidebar"] button');
+      if (closeBtn) closeBtn.click();
+    }
+  });
+</script>
 """, unsafe_allow_html=True)
 
 
