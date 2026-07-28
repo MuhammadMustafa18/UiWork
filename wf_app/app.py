@@ -67,8 +67,8 @@ _COHERE_CSS = """
   h3 { font-size: 20px !important; line-height: 1.3 !important; }
   h4 { font-size: 18px !important; }
 
-  .hero-title { text-align: center; margin-top: 12vh; margin-bottom: 8px; }
-  .hero-sub { text-align: center; color: var(--muted); font-size: 16px; margin-bottom: 48px; }
+  .hero-title { text-align: center; margin-top: 10vh; margin-bottom: 6px; }
+  .hero-sub { text-align: center; color: var(--muted); font-size: 15px; margin-bottom: 28px; }
 
   .chat-msg { padding: 18px 0; border-bottom: 1px solid var(--border-light); }
   .chat-user { font-weight: 500; color: var(--near-black); }
@@ -103,12 +103,12 @@ _COHERE_CSS = """
   }
   .stChatInput textarea::placeholder { color: var(--muted) !important; }
 
-  /* File uploader — boxed, label prominent */
+  /* File uploader — boxed, label prominent, compact */
   [data-testid="stFileUploader"] {
     background: var(--canvas) !important;
     border: 1px solid var(--hairline) !important;
-    border-radius: 16px !important;
-    padding: 20px 22px !important;
+    border-radius: 12px !important;
+    padding: 12px 14px !important;
     transition: border-color .15s ease;
   }
   [data-testid="stFileUploader"]:hover { border-color: var(--near-black) !important; }
@@ -116,20 +116,21 @@ _COHERE_CSS = """
   [data-testid="stFileUploaderDropzone"] {
     background: var(--stone) !important;
     border: 1px dashed var(--hairline) !important;
-    border-radius: 12px !important;
-    padding: 18px !important;
+    border-radius: 8px !important;
+    padding: 10px 12px !important;
   }
   [data-testid="stFileUploaderDropzone"] section { padding: 0 !important; }
+  [data-testid="stFileUploaderDropzone"] button { padding: 4px 10px !important; font-size: 12px !important; }
 
   /* Make the uploader label the box title */
   [data-testid="stFileUploader"] label {
     font-family: 'Space Grotesk', sans-serif !important;
-    font-size: 13px !important;
+    font-size: 11px !important;
     font-weight: 500 !important;
     text-transform: uppercase !important;
     letter-spacing: 0.28px !important;
     color: var(--near-black) !important;
-    margin-bottom: 12px !important;
+    margin-bottom: 8px !important;
   }
 
   .stButton > button {
@@ -242,8 +243,13 @@ def _run_pipeline(data_bytes, data_name, hier_bytes, hier_name):
                 fair_tabs=fair_tabs, fair_checks=fair_checks, fair_failed=fair_failed)
 
 
-# ── uploaders — only visible before a file is loaded ──────────────────
+# ── hero + uploaders — only visible before a file is loaded ───────────
 if st.session_state.pipeline_result is None and st.session_state.pipeline_error is None:
+    st.markdown("<div class='hero-title'><h1>Workforce Intelligence</h1></div>",
+                unsafe_allow_html=True)
+    st.markdown("<div class='hero-sub'>Attach an employee extract to begin. "
+                "Every figure recomputes from the uploaded file.</div>",
+                unsafe_allow_html=True)
     box_l, box_r = st.columns(2)
     with box_l:
         data_file = st.file_uploader("Attach data", type=["xlsx", "xls", "csv"],
@@ -252,9 +258,6 @@ if st.session_state.pipeline_result is None and st.session_state.pipeline_error 
         hier_file = st.file_uploader("Attach hierarchy (optional)",
                                      type=["xlsx", "xls", "csv"],
                                      key="hier_attach")
-    col_l, col_mid, col_r = st.columns([1, 2, 1])
-    with col_mid:
-        st.caption("Attach data is required · hierarchy is optional.")
 else:
     data_file = None
     hier_file = None
@@ -412,13 +415,8 @@ def render_payload(msg):
         st.pyplot(fig, clear_figure=True)
 
 
-# ── dashboard view ──────────────────────────────────────────────────────
-if R is None and err is None:
-    st.markdown("<div class='hero-title'><h1>Workforce Intelligence</h1></div>", unsafe_allow_html=True)
-    st.markdown("<div class='hero-sub'>Attach an employee extract to begin. "
-                "Every figure recomputes from the uploaded file.</div>", unsafe_allow_html=True)
-elif err is not None:
-    st.markdown("<div class='hero-title'><h1>Workforce Intelligence</h1></div>", unsafe_allow_html=True)
+# ── dashboard view (only renders when data is loaded) ─────────────────
+if err is not None:
     st.error("Pipeline error — the uploaded file may have missing or mismatched columns.")
     with st.expander("Error details"):
         st.code(f"{type(err).__name__}: {err}", language="text")
