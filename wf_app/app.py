@@ -38,8 +38,7 @@ _COHERE_CSS = """
     --focus: #4c6ee6;
   }
 
-  /* ── Hide sidebar entirely (chat-mode) ─────────────────────────────── */
-  [data-testid="stSidebar"] { display: none !important; }
+  /* Sidebar visible (Power BI mode) — see dedicated sidebar block below. */
   [data-testid="stSidebarCollapsedControl"] { display: none !important; }
 
   html, body, [class*="css"] {
@@ -280,6 +279,55 @@ _COHERE_CSS = """
     color: var(--muted);
   }
 
+  /* ── Power BI-style sidebar (re-enabled) ────────────────────────────── */
+  [data-testid="stSidebar"] {
+    display: block !important;
+    background: var(--canvas) !important;
+    border-right: 1px solid var(--hairline) !important;
+    width: 280px !important;
+    min-width: 280px !important;
+    padding: 16px 12px !important;
+  }
+  [data-testid="stSidebar"] [data-testid="stExpander"] {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+  [data-testid="stSidebar"] [data-testid="stExpander"] summary {
+    font-family: 'Space Grotesk', sans-serif !important;
+    font-size: 12px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.28px !important;
+    font-weight: 500 !important;
+    color: var(--near-black) !important;
+    padding: 8px 0 !important;
+  }
+
+  /* ── Slicer chip row ───────────────────────────────────────────────── */
+  div.slicer-row {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin: 12px 0 4px 0;
+    align-items: center;
+  }
+  div.slicer-row .chip {
+    display: inline-block;
+    background: var(--stone);
+    border: 1px solid var(--hairline);
+    border-radius: 16px;
+    padding: 4px 10px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    color: var(--near-black);
+  }
+  div.slicer-row .chip-meta {
+    margin-left: auto;
+    font-family: 'Space Grotesk', monospace;
+    font-size: 11px;
+    letter-spacing: 0.28px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
   /* ── Animations (Cohere-style: fast, restrained) ───────────────────── */
   @keyframes fade-up {
     from { opacity: 0; transform: translateY(8px); }
@@ -354,7 +402,9 @@ for k, v in {"messages": [], "uploaded_data_name": None,
              "uploaded_hier_name": None, "uploaded_at": None,
              "uploaded_size": None, "active_tile_label": "— Select analysis —",
              "open_section": None, "pipeline_result": None,
-             "pipeline_error": None}.items():
+             "pipeline_error": None, "flt_jobs": [], "flt_regions": [],
+             "flt_bands": [], "flt_expanders": {"filters": True, "viz": True, "fields": True}
+             }.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -446,6 +496,18 @@ if data_file is not None and (
 
 R = st.session_state.pipeline_result
 err = st.session_state.pipeline_error
+
+
+# ── filter helper: apply sidebar filters to a view of the data ─────────
+def filtered_emp(R):
+    emp = R["emp"]
+    if st.session_state.flt_jobs:
+        emp = emp[emp["job_group"].isin(st.session_state.flt_jobs)]
+    if st.session_state.flt_regions and "region" in emp.columns:
+        emp = emp[emp["region"].isin(st.session_state.flt_regions)]
+    if st.session_state.flt_bands:
+        emp = emp[emp["band"].isin(st.session_state.flt_bands)]
+    return emp
 
 
 # ── tile dispatcher: key → pipeline call ───────────────────────────────
@@ -579,52 +641,82 @@ if err is not None:
     st.markdown("Expected columns include **`Employee`**, **`Trxn_Date`**, "
                 "transaction KPIs, and branch/HR attributes.")
 elif R is not None:
-    # ── header row: arrow + filename + dropdown ──
-    emp = R["emp"]; meta = R["meta"]
+    emp_full = R["emp"]; meta = R["meta"]
+
+    # ── sidebar: Filters / Visualizations / Fields ────────────────────
+    with st.sidebar:
+        st.markdown("**Filters**")
+        with st.expander("Filters", expanded=st.session_state.flt_expanders["filters"]):
+            jobs = sorted(emp_full["job_group"].dropna().unique())
+            regions = sorted(emp_full.get("region", pd.Series(dtype=object)).dropna().unique())
+            bands = list(BAND_COLORS)
+            st.session_state.flt_jobs = st.multiselect("Job", jobs,
+                                                       default=st.session_state.flt_jobs)
+            st.session_state.flt_regions = st.multiselect("Region", regions,
+                                                          default=st.session_state.flt_regions)
+            st.session_state.flt_bands = st.multiselect("Band", bands,
+                                                        default=st.session_state.flt_bands)
+            if st.button("Clear filters", use_container_width=True, key="clear_flt"):
+                st.session_state.flt_jobs = []
+                st.session_state.flt_regions = []
+                st.session_state.flt_bands = []
+                st.rerun()
+        with st.expander("Visualizations", expanded=st.session_state.flt_expanders["viz"]):
+            st.caption("Active visuals on the canvas:")
+            st.markdown("- KPI strip\n- Band distribution\n- SHAP drivers\n"
+                        "- Top performers\n- Decile profile\n- Hiring recs")
+        with st.expander("Fields", expanded=st.session_state.flt_expanders["fields"]):
+            for f in ["EMPLOYEE_NUMBER", "branch_code", "City", "region", "Grade",
+                      "performance_score", "band", "decile", "growth_index"]:
+                st.checkbox(f, value=False, key=f"fld_{f}", disabled=True,
+                            help="Drag-to-pivot is not available in this view.")
+
+    # ── filtered view ────────────────────────────────────────────────
+    emp = filtered_emp(R)
+    n_filtered = len(emp)
+    is_filtered = bool(st.session_state.flt_jobs or st.session_state.flt_regions or st.session_state.flt_bands)
+
+    # ── header row ───────────────────────────────────────────────────
     size_kb = (st.session_state.uploaded_size or 0) / 1024
     if size_kb >= 1024:
         size_str = f"{size_kb / 1024:.1f} MB"
     else:
         size_str = f"{size_kb:.0f} KB"
-    stats_line = (f"{meta['n_emp']:,} employees · "
+    n_total = meta["n_emp"]
+    head_stats = (f"{n_total:,} employees · "
                   f"{meta['network_days']} business days · "
-                  f"{emp['branch_code'].nunique()} branches · "
-                  f"{size_str} · "
-                  f"uploaded {st.session_state.uploaded_at.strftime('%H:%M') if st.session_state.uploaded_at else 'now'}")
-
-    back_l, mid_l, right_l = st.columns([0.6, 7, 2.4], vertical_alignment="center")
+                  f"{emp_full['branch_code'].nunique()} branches · "
+                  f"{size_str}")
+    back_l, mid_l = st.columns([0.6, 11], vertical_alignment="center")
     with back_l:
         if st.button("←", key="back_arrow", help="Replace file"):
             for k in ("pipeline_result", "pipeline_error", "uploaded_data_name",
                       "uploaded_hier_name", "uploaded_at", "uploaded_size",
-                      "messages", "open_section"):
-                st.session_state[k] = None
+                      "messages", "open_section",
+                      "flt_jobs", "flt_regions", "flt_bands"):
+                st.session_state[k] = [] if k.startswith("flt_") else None
             st.rerun()
     with mid_l:
         st.markdown(
             f"<div class='dash-filename anim-fade-up'>{st.session_state.uploaded_data_name}</div>"
-            f"<div class='dash-stats anim-fade-up-1'>{stats_line}</div>",
+            f"<div class='dash-stats anim-fade-up-1'>{head_stats}</div>",
             unsafe_allow_html=True)
-    with right_l:
-        tile_options = ["— Select analysis —", "Headcount", "Bands", "Top performers",
-                        "Low performers", "Fairness audit", "SHAP drivers",
-                        "HP personas", "LP segments", "Growth drivers",
-                        "Hiring recs", "Rollup", "Deciles"]
-        tile_keys = [None, "headcount", "bands", "top", "low", "fairness", "shap",
-                     "hp_personas", "lp_segments", "growth", "hiring", "rollup", "deciles"]
-        current_label = st.session_state.get("active_tile_label", tile_options[0])
-        try:
-            current_idx = tile_options.index(current_label)
-        except ValueError:
-            current_idx = 0
-        picked = st.selectbox("", tile_options, index=current_idx,
-                              label_visibility="collapsed", key="analysis_picker")
-        if picked != tile_options[0]:
-            st.session_state.open_section = tile_keys[tile_options.index(picked)]
-            st.session_state.active_tile_label = picked
-        else:
-            st.session_state.open_section = None
-            st.session_state.active_tile_label = picked
+
+    # ── slicer chip row ──────────────────────────────────────────────
+    chips = []
+    for j in st.session_state.flt_jobs:    chips.append(("Job", j))
+    for r in st.session_state.flt_regions: chips.append(("Region", r))
+    for b in st.session_state.flt_bands:   chips.append(("Band", b))
+    match_str = f"{n_filtered:,} of {n_total:,} match"
+    if chips:
+        st.markdown(
+            "<div class='slicer-row'>"
+            + "".join(f"<span class='chip'>{k}: {v}</span>" for k, v in chips)
+            + f"<span class='chip-meta'>{match_str}</span>"
+            + "</div>", unsafe_allow_html=True)
+    else:
+        st.markdown(f"<div class='slicer-row'><span class='chip-meta'>"
+                    f"{match_str} · no filters</span></div>", unsafe_allow_html=True)
 
     if meta["network_days"] < 60:
         st.warning(f"Window is only {meta['network_days']} business days — "
@@ -634,16 +726,114 @@ elif R is not None:
 
     st.divider()
 
-    # ── tile grid (3 columns, one row per analysis) ──
-    if "open_section" not in st.session_state:
-        st.session_state.open_section = None
+    # ── 2x2 canvas ───────────────────────────────────────────────────
+    st.markdown("<div class='anim-section'>", unsafe_allow_html=True)
 
-    # ── active section content (driven by dropdown above) ──
-    if st.session_state.open_section:
-        key = st.session_state.open_section
-        st.markdown("<div class='anim-section'>", unsafe_allow_html=True)
-        render_payload(answer(key))
-        st.markdown("</div>", unsafe_allow_html=True)
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Employees (filtered)", f"{n_filtered:,}",
+             delta=f"{n_filtered - n_total:,}" if is_filtered else None,
+             delta_color="off")
+    k2.metric("Branches", f"{emp['branch_code'].nunique() if n_filtered else 0}")
+    k3.metric("Median score",
+              f"{emp['performance_score'].median():.1f}" if n_filtered else "—")
+    k4.metric("High performers",
+              int((emp["band"] == "High Performer").sum()) if n_filtered else 0)
+
+    st.write("")
+
+    r1c1, r1c2 = st.columns(2)
+    with r1c1:
+        st.markdown("**Band distribution**")
+        if n_filtered:
+            bc = emp["band"].value_counts().reindex(list(BAND_COLORS)).fillna(0).astype(int)
+            fig, ax = plt.subplots(figsize=(5, 2.4))
+            ax.bar(bc.index, bc.values, color=[BAND_COLORS[b] for b in bc.index])
+            for i, v in enumerate(bc.values):
+                ax.text(i, v, f"{int(v)}", ha="center", va="bottom", fontsize=8)
+            ax.tick_params(axis="x", rotation=15)
+            st.pyplot(fig, clear_figure=True)
+        else:
+            st.caption("No data matches current filters.")
+    with r1c2:
+        st.markdown("**SHAP drivers**")
+        if n_filtered >= 20:
+            try:
+                feats = [c for c in R["sur"]["features"] if c in emp.columns]
+                if len(feats) >= 3:
+                    from sklearn.model_selection import train_test_split
+                    from xgboost import XGBRegressor
+                    Xf = emp[feats].astype(float)
+                    yf = emp["performance_score"].astype(float)
+                    if yf.std() > 0:
+                        Xtr, Xte, ytr, yte = train_test_split(Xf, yf, test_size=0.25, random_state=42)
+                        m = XGBRegressor(n_estimators=200, max_depth=4, learning_rate=0.05,
+                                         subsample=0.9, colsample_bytree=0.9, random_state=42).fit(Xtr, ytr)
+                        sv = shap.TreeExplainer(m)(Xf)
+                        fig = plt.figure(figsize=(5, 2.6))
+                        shap.plots.beeswarm(sv, max_display=8, show=False)
+                        st.pyplot(fig, clear_figure=True)
+                    else:
+                        st.caption("Score variance is zero — SHAP unavailable.")
+                else:
+                    st.caption("Not enough features for SHAP.")
+            except Exception as e:
+                st.caption(f"SHAP unavailable on filtered set: {type(e).__name__}")
+        else:
+            st.caption("Need at least 20 rows for SHAP.")
+
+    r2c1, r2c2 = st.columns(2)
+    with r2c1:
+        st.markdown("**Top performers**")
+        if n_filtered:
+            view = emp.sort_values("performance_score", ascending=False).head(10)
+            st.dataframe(
+                view[["EMPLOYEE_NUMBER", "job_group", "branch_code",
+                      "performance_score", "band"]].round(2),
+                use_container_width=True, hide_index=True, height=280)
+        else:
+            st.caption("No data matches current filters.")
+    with r2c2:
+        st.markdown("**Decile profile**")
+        if n_filtered:
+            job = emp["job_group"].value_counts().idxmax()
+            g = emp[emp["job_group"] == job]
+            order = [f"D{i}" for i in range(1, 11)]
+            t = g.groupby("decile")[["trxn_count_per_day", "trxn_amount_m_per_day",
+                                      "active_days_ratio"]].mean().reindex(order).round(2)
+            st.dataframe(t, use_container_width=True, height=280)
+            st.caption(f"Job: {job}")
+        else:
+            st.caption("No data matches current filters.")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── detailed sections ────────────────────────────────────────────
+    with st.expander("Fairness audit", expanded=False):
+        st.dataframe(R["fair_checks"], use_container_width=True, hide_index=True)
+    with st.expander("HP personas", expanded=False):
+        prof = R["hp"]["profile"].copy()
+        prof.index = [R["hp"]["personas"][c] for c in prof.index]
+        st.dataframe(prof, use_container_width=True)
+    with st.expander("LP segments", expanded=False):
+        st.dataframe(R["lp"]["profile"], use_container_width=True)
+        st.dataframe(R["lp"]["diagnoses"], use_container_width=True, hide_index=True)
+    with st.expander("Growth drivers", expanded=False):
+        st.dataframe(R["gr"]["lifts"], use_container_width=True, hide_index=True)
+    with st.expander("Hiring recs (per region)", expanded=False):
+        recs = P.hiring_recs(emp, R["pool"], "region", 0.12, 0.05, 0.03)
+        st.dataframe(recs, use_container_width=True, hide_index=True)
+    with st.expander("Hierarchy rollup (region)", expanded=False):
+        st.dataframe(P.rollup(emp, "region"), use_container_width=True, height=320)
+    with st.expander("Low performers", expanded=False):
+        if n_filtered:
+            view = emp.sort_values("performance_score").head(15)
+            st.dataframe(view[["EMPLOYEE_NUMBER", "job_group", "branch_code",
+                               "performance_score", "band"]].round(2),
+                         use_container_width=True, hide_index=True)
+        else:
+            st.caption("No data matches current filters.")
+
+# else: no file uploaded, no error — landing page already showed uploaders above.
 
 
 # ── composer (pinned to bottom) ─────────────────────────────────────────
