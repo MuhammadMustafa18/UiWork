@@ -422,7 +422,7 @@ if err is not None:
         st.code(f"{type(err).__name__}: {err}", language="text")
     st.markdown("Expected columns include **`Employee`**, **`Trxn_Date`**, "
                 "transaction KPIs, and branch/HR attributes.")
-else:
+elif R is not None:
     # ── header row: arrow + filename ──
     back_l, name_l = st.columns([0.6, 9])
     with back_l:
@@ -445,6 +445,7 @@ else:
                    "treat scores as short-window throughput indicators.")
     if R["fair_failed"]:
         st.error("Fairness audit FAILED — scores must be withheld from consequential HR use.")
+# else: no file uploaded, no error — landing page already showed uploaders above.
 
     st.divider()
 
