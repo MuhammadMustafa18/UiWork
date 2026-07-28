@@ -328,6 +328,27 @@ _COHERE_CSS = """
     color: var(--muted);
   }
 
+  /* ── Resizable row divider (visual handle + hover state) ──────────── */
+  div.split-bar {
+    display: flex; justify-content: center;
+    margin: 4px 0;
+    height: 12px;
+  }
+  div.split-handle {
+    color: var(--hairline);
+    font-size: 14px;
+    line-height: 1;
+    user-select: none;
+    cursor: ns-resize;
+    padding: 2px 12px;
+    border-radius: 4px;
+    transition: color .15s, background-color .15s;
+  }
+  div.split-handle:hover {
+    color: var(--near-black);
+    background: var(--stone);
+  }
+
   /* ── Animations (Cohere-style: fast, restrained) ───────────────────── */
   @keyframes fade-up {
     from { opacity: 0; transform: translateY(8px); }
@@ -403,7 +424,11 @@ for k, v in {"messages": [], "uploaded_data_name": None,
              "uploaded_size": None, "active_tile_label": "— Select analysis —",
              "open_section": None, "pipeline_result": None,
              "pipeline_error": None, "flt_jobs": [], "flt_regions": [],
-             "flt_bands": [], "flt_expanders": {"filters": True, "viz": True, "fields": True}
+             "flt_bands": [], "flt_expanders": {"filters": True, "viz": True, "fields": True,
+                                                "panels": True},
+             "show_kpi": True, "show_bands": True, "show_shap": True,
+             "show_top": True, "show_deciles": True,
+             "row_split_top": 50, "row_split_bot": 50
              }.items():
     if k not in st.session_state:
         st.session_state[k] = v
@@ -670,6 +695,25 @@ elif R is not None:
                       "performance_score", "band", "decile", "growth_index"]:
                 st.checkbox(f, value=False, key=f"fld_{f}", disabled=True,
                             help="Drag-to-pivot is not available in this view.")
+        with st.expander("Panels", expanded=st.session_state.flt_expanders["panels"]):
+            st.session_state.show_kpi = st.checkbox("KPI strip", value=st.session_state.show_kpi)
+            st.session_state.show_bands = st.checkbox("Band distribution", value=st.session_state.show_bands)
+            st.session_state.show_shap = st.checkbox("SHAP drivers", value=st.session_state.show_shap)
+            st.session_state.show_top = st.checkbox("Top performers", value=st.session_state.show_top)
+            st.session_state.show_deciles = st.checkbox("Decile profile", value=st.session_state.show_deciles)
+            st.caption("Hide panels to focus on what matters.")
+            if st.session_state.show_bands and st.session_state.show_shap:
+                st.session_state.row_split_top = st.slider(
+                    "Row 1 split (Band | SHAP)",
+                    min_value=20, max_value=80,
+                    value=st.session_state.row_split_top, step=5,
+                    help="Drag to resize the divider between Band and SHAP.")
+            if st.session_state.show_top and st.session_state.show_deciles:
+                st.session_state.row_split_bot = st.slider(
+                    "Row 2 split (Top | Deciles)",
+                    min_value=20, max_value=80,
+                    value=st.session_state.row_split_bot, step=5,
+                    help="Drag to resize the divider between Top performers and Deciles.")
 
     # ── filtered view ────────────────────────────────────────────────
     emp = filtered_emp(R)
@@ -729,81 +773,114 @@ elif R is not None:
     # ── 2x2 canvas ───────────────────────────────────────────────────
     st.markdown("<div class='anim-section'>", unsafe_allow_html=True)
 
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Employees (filtered)", f"{n_filtered:,}",
-             delta=f"{n_filtered - n_total:,}" if is_filtered else None,
-             delta_color="off")
-    k2.metric("Branches", f"{emp['branch_code'].nunique() if n_filtered else 0}")
-    k3.metric("Median score",
-              f"{emp['performance_score'].median():.1f}" if n_filtered else "—")
-    k4.metric("High performers",
-              int((emp["band"] == "High Performer").sum()) if n_filtered else 0)
+    if st.session_state.show_kpi:
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Employees (filtered)", f"{n_filtered:,}",
+                 delta=f"{n_filtered - n_total:,}" if is_filtered else None,
+                 delta_color="off")
+        k2.metric("Branches", f"{emp['branch_code'].nunique() if n_filtered else 0}")
+        k3.metric("Median score",
+                  f"{emp['performance_score'].median():.1f}" if n_filtered else "—")
+        k4.metric("High performers",
+                  int((emp["band"] == "High Performer").sum()) if n_filtered else 0)
+        st.write("")
 
-    st.write("")
+    # Row 1: resizable split (slider-driven, drag updates the slider)
+    ratio_top = st.session_state.row_split_top
+    if st.session_state.show_bands and st.session_state.show_shap:
+        left_w = max(1, ratio_top); right_w = max(1, 100 - ratio_top)
+        r1c1, r1c2 = st.columns([left_w * 0.01, right_w * 0.01])
+    elif st.session_state.show_bands:
+        r1c1, _ = st.columns(1); r1c2 = None
+    elif st.session_state.show_shap:
+        _, r1c2 = st.columns(1); r1c1 = None
+    else:
+        r1c1 = r1c2 = None
 
-    r1c1, r1c2 = st.columns(2)
-    with r1c1:
-        st.markdown("**Band distribution**")
-        if n_filtered:
-            bc = emp["band"].value_counts().reindex(list(BAND_COLORS)).fillna(0).astype(int)
-            fig, ax = plt.subplots(figsize=(5, 2.4))
-            ax.bar(bc.index, bc.values, color=[BAND_COLORS[b] for b in bc.index])
-            for i, v in enumerate(bc.values):
-                ax.text(i, v, f"{int(v)}", ha="center", va="bottom", fontsize=8)
-            ax.tick_params(axis="x", rotation=15)
-            st.pyplot(fig, clear_figure=True)
-        else:
-            st.caption("No data matches current filters.")
-    with r1c2:
-        st.markdown("**SHAP drivers**")
-        if n_filtered >= 20:
-            try:
-                feats = [c for c in R["sur"]["features"] if c in emp.columns]
-                if len(feats) >= 3:
-                    from sklearn.model_selection import train_test_split
-                    from xgboost import XGBRegressor
-                    Xf = emp[feats].astype(float)
-                    yf = emp["performance_score"].astype(float)
-                    if yf.std() > 0:
-                        Xtr, Xte, ytr, yte = train_test_split(Xf, yf, test_size=0.25, random_state=42)
-                        m = XGBRegressor(n_estimators=200, max_depth=4, learning_rate=0.05,
-                                         subsample=0.9, colsample_bytree=0.9, random_state=42).fit(Xtr, ytr)
-                        sv = shap.TreeExplainer(m)(Xf)
-                        fig = plt.figure(figsize=(5, 2.6))
-                        shap.plots.beeswarm(sv, max_display=8, show=False)
-                        st.pyplot(fig, clear_figure=True)
+    if r1c1 is not None:
+        with r1c1:
+            st.markdown("**Band distribution**")
+            if n_filtered:
+                bc = emp["band"].value_counts().reindex(list(BAND_COLORS)).fillna(0).astype(int)
+                fig, ax = plt.subplots(figsize=(5, 2.4))
+                ax.bar(bc.index, bc.values, color=[BAND_COLORS[b] for b in bc.index])
+                for i, v in enumerate(bc.values):
+                    ax.text(i, v, f"{int(v)}", ha="center", va="bottom", fontsize=8)
+                ax.tick_params(axis="x", rotation=15)
+                st.pyplot(fig, clear_figure=True)
+            else:
+                st.caption("No data matches current filters.")
+    if r1c2 is not None:
+        with r1c2:
+            st.markdown("**SHAP drivers**")
+            if n_filtered >= 20:
+                try:
+                    feats = [c for c in R["sur"]["features"] if c in emp.columns]
+                    if len(feats) >= 3:
+                        from sklearn.model_selection import train_test_split
+                        from xgboost import XGBRegressor
+                        Xf = emp[feats].astype(float)
+                        yf = emp["performance_score"].astype(float)
+                        if yf.std() > 0:
+                            Xtr, Xte, ytr, yte = train_test_split(Xf, yf, test_size=0.25, random_state=42)
+                            m = XGBRegressor(n_estimators=200, max_depth=4, learning_rate=0.05,
+                                             subsample=0.9, colsample_bytree=0.9, random_state=42).fit(Xtr, ytr)
+                            sv = shap.TreeExplainer(m)(Xf)
+                            fig = plt.figure(figsize=(5, 2.6))
+                            shap.plots.beeswarm(sv, max_display=8, show=False)
+                            st.pyplot(fig, clear_figure=True)
+                        else:
+                            st.caption("Score variance is zero — SHAP unavailable.")
                     else:
-                        st.caption("Score variance is zero — SHAP unavailable.")
-                else:
-                    st.caption("Not enough features for SHAP.")
-            except Exception as e:
-                st.caption(f"SHAP unavailable on filtered set: {type(e).__name__}")
-        else:
-            st.caption("Need at least 20 rows for SHAP.")
+                        st.caption("Not enough features for SHAP.")
+                except Exception as e:
+                    st.caption(f"SHAP unavailable on filtered set: {type(e).__name__}")
+            else:
+                st.caption("Need at least 20 rows for SHAP.")
 
-    r2c1, r2c2 = st.columns(2)
-    with r2c1:
-        st.markdown("**Top performers**")
-        if n_filtered:
-            view = emp.sort_values("performance_score", ascending=False).head(10)
-            st.dataframe(
-                view[["EMPLOYEE_NUMBER", "job_group", "branch_code",
-                      "performance_score", "band"]].round(2),
-                use_container_width=True, hide_index=True, height=280)
-        else:
-            st.caption("No data matches current filters.")
-    with r2c2:
-        st.markdown("**Decile profile**")
-        if n_filtered:
-            job = emp["job_group"].value_counts().idxmax()
-            g = emp[emp["job_group"] == job]
-            order = [f"D{i}" for i in range(1, 11)]
-            t = g.groupby("decile")[["trxn_count_per_day", "trxn_amount_m_per_day",
-                                      "active_days_ratio"]].mean().reindex(order).round(2)
-            st.dataframe(t, use_container_width=True, height=280)
-            st.caption(f"Job: {job}")
-        else:
-            st.caption("No data matches current filters.")
+    # Drag handle between rows 1 and 2 — updates the bottom-row slider
+    if st.session_state.show_bands and st.session_state.show_shap:
+        st.markdown(
+            f"<div class='split-bar'>"
+            f"<div class='split-handle' id='splitTop' "
+            f"data-pct='{st.session_state.row_split_top}'>⋮</div>"
+            f"</div>", unsafe_allow_html=True)
+
+    ratio_bot = st.session_state.row_split_bot
+    if st.session_state.show_top and st.session_state.show_deciles:
+        left_w = max(1, ratio_bot); right_w = max(1, 100 - ratio_bot)
+        r2c1, r2c2 = st.columns([left_w * 0.01, right_w * 0.01])
+    elif st.session_state.show_top:
+        r2c1, _ = st.columns(1); r2c2 = None
+    elif st.session_state.show_deciles:
+        _, r2c2 = st.columns(1); r2c1 = None
+    else:
+        r2c1 = r2c2 = None
+
+    if r2c1 is not None:
+        with r2c1:
+            st.markdown("**Top performers**")
+            if n_filtered:
+                view = emp.sort_values("performance_score", ascending=False).head(10)
+                st.dataframe(
+                    view[["EMPLOYEE_NUMBER", "job_group", "branch_code",
+                          "performance_score", "band"]].round(2),
+                    use_container_width=True, hide_index=True, height=280)
+            else:
+                st.caption("No data matches current filters.")
+    if r2c2 is not None:
+        with r2c2:
+            st.markdown("**Decile profile**")
+            if n_filtered:
+                job = emp["job_group"].value_counts().idxmax()
+                g = emp[emp["job_group"] == job]
+                order = [f"D{i}" for i in range(1, 11)]
+                t = g.groupby("decile")[["trxn_count_per_day", "trxn_amount_m_per_day",
+                                          "active_days_ratio"]].mean().reindex(order).round(2)
+                st.dataframe(t, use_container_width=True, height=280)
+                st.caption(f"Job: {job}")
+            else:
+                st.caption("No data matches current filters.")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
