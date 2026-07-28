@@ -11,7 +11,8 @@ import matplotlib.pyplot as plt
 import shap
 import pipeline as P
 
-st.set_page_config(page_title="UBL Workforce Intelligence", page_icon=None, layout="wide")
+st.set_page_config(page_title="UBL Workforce Intelligence", page_icon=None, layout="wide",
+                   initial_sidebar_state="expanded")
 plt.rcParams["figure.dpi"] = 100
 
 # ── Cohere-inspired theme (chat mode) ────────────────────────────────────
@@ -39,7 +40,7 @@ _COHERE_CSS = """
   }
 
   /* Sidebar visible (Power BI mode) — see dedicated sidebar block below. */
-  [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+  /* Keep the collapse-control visible so users can hide/show the sidebar. */
 
   html, body, [class*="css"] {
     font-family: 'Inter', 'Space Grotesk', system-ui, sans-serif !important;
@@ -281,12 +282,22 @@ _COHERE_CSS = """
 
   /* ── Power BI-style sidebar (re-enabled) ────────────────────────────── */
   [data-testid="stSidebar"] {
-    display: block !important;
     background: var(--canvas) !important;
     border-right: 1px solid var(--hairline) !important;
-    width: 280px !important;
     min-width: 280px !important;
+    max-width: 280px !important;
     padding: 16px 12px !important;
+  }
+  /* Style the re-open button when sidebar is collapsed */
+  [data-testid="stSidebarCollapsedControl"] {
+    background: var(--canvas) !important;
+    border: 1px solid var(--hairline) !important;
+    border-radius: 0 8px 8px 0 !important;
+    color: var(--near-black) !important;
+    padding: 8px 6px !important;
+  }
+  [data-testid="stSidebarCollapsedControl"]:hover {
+    background: var(--stone) !important;
   }
   [data-testid="stSidebar"] [data-testid="stExpander"] {
     border: none !important;
